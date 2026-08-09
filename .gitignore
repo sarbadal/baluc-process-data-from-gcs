@@ -1,0 +1,15 @@
+.env/
+.venv/
+.vscode/
+.idea/
+.DS_Store
+
+storage/
+
+.env
+
+__pycache__/
+*.pyc
+
+data/
+_google_auth_key.json

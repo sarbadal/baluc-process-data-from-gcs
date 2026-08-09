@@ -1,0 +1,131 @@
+{
+  "split_date_column": "event_date",
+  "_comment_field_mapping": "Mapping direction is target_field -> source_csv_column",
+  "field_mapping": {
+    "tm_fiscal_year": "TM Fiscal Year",
+    "month": "Month",
+    "event_date": "Date",
+    "day_of_month": "Day of Month",
+    "zone": "Zone",
+    "region": "Region",
+    "state": "State",
+    "city": "City",
+    "lob": "LOB",
+    "ppl": "PPL",
+    "pl": "PL",
+    "color": "Color",
+    "fuel_type": "Fuel Type",
+    "source_pv": "Source(PV)",
+    "source": "Source",
+    "lead_classification": "Lead Classification",
+    "gf_opportunity_created": "# of GF Opty Created",
+    "yf_opportunity_created": "# of YF Opty Created",
+    "test_drive_done_detailed_level": "# of Test Drive Done (Detailed Level)",
+    "sale_closed_qty": "06 Sale Closed Qty"
+  },
+  "content_hints": {
+    "sample_size": 10,
+    "column_value_patterns": [
+        {
+            "column": "tm_fiscal_year",
+            "pattern": "^\\d{4}-\\d{2}$",
+            "weight": 1.0
+        },
+        {
+            "column": "month",
+            "pattern": "^\\d{4}\\s*/\\s*\\d{1,2}$",
+            "weight": 1.0
+        },
+        {
+            "column": "event_date",
+            "pattern": "^\\d{4}[-/]\\d{2}[-/]\\d{2}$",
+            "weight": 1.0
+        },
+        {
+            "column": "day_of_month",
+            "pattern": "^\\d{1,2}$",
+            "weight": 1.0
+        },
+        {
+            "column": "region",
+            "pattern": "^.+$",
+            "weight": 0.5
+        },
+        {
+            "column": "zone",
+            "pattern": "^.+$",
+            "weight": 0.5
+        },
+        {
+            "column": "area",
+            "pattern": "^.+$",
+            "weight": 0.5
+        },
+        {
+            "column": "division",
+            "pattern": "^.+$",
+            "weight": 0.5
+        },
+        {
+            "column": "lob",
+            "pattern": "^.+$",
+            "weight": 0.5
+        },
+        {
+            "column": "ppl",
+            "pattern": "^.+$",
+            "weight": 0.5
+        },
+        {
+            "column": "pl",
+            "pattern": "^.+$",
+            "weight": 0.5
+        },
+        {
+            "column": "color",
+            "pattern": "^.+$",
+            "weight": 0.5
+        },
+        {
+            "column": "fuel_type",
+            "pattern": "^.+$",
+            "weight": 0.5
+        },
+        {
+            "column": "source_pv",
+            "pattern": "^.+$",
+            "weight": 0.5
+        },
+        {
+            "column": "source",
+            "pattern": "^.+$",
+            "weight": 0.5
+        },
+        {
+            "column": "lead_classification",
+            "pattern": "^.+$",
+            "weight": 0.5
+        },
+        {
+            "column": "gf_opportunity_created",
+            "pattern": "^\\d*$",
+            "weight": 1.0
+        },
+        {
+            "column": "yf_opportunity_created",
+            "pattern": "^\\d*$",
+            "weight": 1.0
+        },
+        {
+            "column": "test_drive_done_detailed_level",
+            "pattern": "^\\d*$",
+            "weight": 1.0
+        },
+        {
+            "column": "sale_closed_qty",
+            "pattern": "^\\d*$",
+            "weight": 1.0
+        }
+    ]
+  }
+}
