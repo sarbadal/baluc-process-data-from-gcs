@@ -14,7 +14,7 @@ import pandas as pd
 
 from .category_detection import CategoryDetectionService
 from .naming import FilenameConventionService
-from .upload_jobs import upload_csv_content
+from .upload_jobs import UploadCsvContentParams, upload_csv_content
 
 
 LOGGER = logging.getLogger(__name__)
@@ -27,6 +27,13 @@ class ValidationSummary:
     threshold: float
     total_rules: int
     failed_rules: int
+
+
+@dataclass(frozen=True)
+class DestinationPathParams:
+    category: str
+    split_day: date
+    output_filename: str
 
 
 @dataclass
@@ -95,18 +102,18 @@ class FileProcessingService:
         uploaded_outputs: list[dict[str, str]] = []
         for split_day, day_frame in frames_by_date.items():
             output_filename = self.naming_service.build_filename(category=category, when=split_day)
-            destination_path = self._build_destination_path(
+            destination_path = self._build_destination_path(DestinationPathParams(
                 category=category,
                 split_day=split_day,
                 output_filename=output_filename,
-            )
+            ))
             csv_content = day_frame.to_csv(index=False)
-            storage_uri = upload_csv_content(
+            storage_uri = upload_csv_content(UploadCsvContentParams(
                 storage_client=self.storage_client,
                 target_bucket=self.target_bucket,
                 destination_path=destination_path,
                 csv_content=csv_content,
-            )
+            ))
             uploaded_outputs.append(
                 {
                     "date": split_day.isoformat(),
@@ -125,11 +132,11 @@ class FileProcessingService:
         )
         return uploaded_outputs
 
-    def _build_destination_path(self, category: str, split_day: date, output_filename: str) -> str:
-        folder_category = self._folder_category_name(category)
-        year = split_day.strftime("%Y")
-        month = split_day.strftime("%m")
-        return f"{folder_category}/{year}/{month}/{output_filename}"
+    def _build_destination_path(self, params: DestinationPathParams) -> str:
+        folder_category = self._folder_category_name(params.category)
+        year = params.split_day.strftime("%Y")
+        month = params.split_day.strftime("%m")
+        return f"{folder_category}/{year}/{month}/{params.output_filename}"
 
     @staticmethod
     def _folder_category_name(category: str) -> str:

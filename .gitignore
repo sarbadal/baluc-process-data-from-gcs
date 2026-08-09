@@ -13,3 +13,4 @@ __pycache__/
 
 data/
 _google_auth_key.json
+deploy.env
