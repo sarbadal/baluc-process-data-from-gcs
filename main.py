@@ -72,9 +72,8 @@ def _get_processor() -> FileProcessingService:
     return _PROCESSOR
 
 
-def process_gcs_file(event: dict, context: object) -> None:
+def process_gcs_file(event: dict, _context: object) -> None:
     """Cloud Function entry point for GCS object finalize events."""
-    del context
 
     source_bucket = _require_env("SOURCE_BUCKET")
 
