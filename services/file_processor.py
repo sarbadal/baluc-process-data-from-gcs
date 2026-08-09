@@ -31,17 +31,17 @@ class ValidationSummary:
 
 @dataclass
 class FileProcessingService:
-    _storage_client: storage.Client
-    _target_bucket: str
-    _naming_service: FilenameConventionService
-    _processing_configs: dict[str, dict[str, Any]]
-    _validation_min_score: float = 0.7
+    storage_client: storage.Client
+    target_bucket: str
+    naming_service: FilenameConventionService
+    processing_configs: dict[str, dict[str, Any]]
+    validation_min_score: float = 0.7
     _category_detector: CategoryDetectionService = field(init=False)
 
     def __post_init__(self) -> None:
         self._category_detector = CategoryDetectionService(
-            naming_service=self._naming_service,
-            processing_category_configs=self._processing_configs,
+            naming_service=self.naming_service,
+            processing_category_configs=self.processing_configs,
         )
 
     def process_uploaded_object(self, source_bucket: str, object_name: str) -> list[dict[str, str]]:
@@ -60,7 +60,7 @@ class FileProcessingService:
             )
 
         category = detected.category.strip().lower()
-        config = self._processing_configs.get(category)
+        config = self.processing_configs.get(category)
         if not isinstance(config, dict):
             raise ValueError(f"No configuration found for detected category: {category}")
 
@@ -94,7 +94,7 @@ class FileProcessingService:
 
         uploaded_outputs: list[dict[str, str]] = []
         for split_day, day_frame in frames_by_date.items():
-            output_filename = self._naming_service.build_filename(category=category, when=split_day)
+            output_filename = self.naming_service.build_filename(category=category, when=split_day)
             destination_path = self._build_destination_path(
                 category=category,
                 split_day=split_day,
@@ -102,8 +102,8 @@ class FileProcessingService:
             )
             csv_content = day_frame.to_csv(index=False)
             storage_uri = upload_csv_content(
-                storage_client=self._storage_client,
-                target_bucket=self._target_bucket,
+                storage_client=self.storage_client,
+                target_bucket=self.target_bucket,
                 destination_path=destination_path,
                 csv_content=csv_content,
             )
@@ -142,7 +142,7 @@ class FileProcessingService:
         return category_folder_map.get(category, category)
 
     def _download_csv(self, source_bucket: str, object_name: str) -> pd.DataFrame:
-        blob = self._storage_client.bucket(source_bucket).blob(object_name)
+        blob = self.storage_client.bucket(source_bucket).blob(object_name)
         csv_bytes = blob.download_as_bytes()
         return pd.read_csv(io.BytesIO(csv_bytes))
 
@@ -188,7 +188,7 @@ class FileProcessingService:
             return ValidationSummary(
                 is_valid=True,
                 score=1.0,
-                threshold=self._validation_min_score,
+                threshold=self.validation_min_score,
                 total_rules=0,
                 failed_rules=0,
             )
@@ -198,7 +198,7 @@ class FileProcessingService:
             return ValidationSummary(
                 is_valid=True,
                 score=1.0,
-                threshold=self._validation_min_score,
+                threshold=self.validation_min_score,
                 total_rules=0,
                 failed_rules=0,
             )
@@ -264,16 +264,16 @@ class FileProcessingService:
             return ValidationSummary(
                 is_valid=True,
                 score=1.0,
-                threshold=self._validation_min_score,
+                threshold=self.validation_min_score,
                 total_rules=0,
                 failed_rules=0,
             )
 
         score = weighted_match / weighted_total
         return ValidationSummary(
-            is_valid=score >= self._validation_min_score,
+            is_valid=score >= self.validation_min_score,
             score=score,
-            threshold=self._validation_min_score,
+            threshold=self.validation_min_score,
             total_rules=evaluated_rules,
             failed_rules=failed_rules,
         )

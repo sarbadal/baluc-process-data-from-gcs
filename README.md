@@ -24,7 +24,7 @@ cp deploy.env.example deploy.env
 - GOOGLE_CLOUD_PROJECT_ID
 - SOURCE_BUCKET
 - TARGET_BUCKET
-- Optional: GOOGLE_AUTH_KEY_PATH, VALIDATION_MIN_SCORE
+- Optional: GOOGLE_AUTH_KEY_PATH, VALIDATION_MIN_SCORE, TRIGGER_LOCATION
 
 Sample `deploy.env`:
 
@@ -32,14 +32,23 @@ Sample `deploy.env`:
 GOOGLE_CLOUD_PROJECT_ID=your-gcp-project-id
 GOOGLE_AUTH_KEY_PATH=_google_auth_key.json
 SOURCE_BUCKET=your-source-bucket
+TRIGGER_LOCATION=us-central1
 TARGET_BUCKET=your-target-bucket
 VALIDATION_MIN_SCORE=0.7
 ```
+
+Set TRIGGER_LOCATION to the SOURCE_BUCKET location (for example `us` for multi-region US buckets).
 
 4. Deploy.
 
 ```bash
 python deployment.py --env-file deploy.env
+```
+
+If you hit Eventarc trigger permission error for Pub/Sub publisher role:
+
+```bash
+python deployment.py --env-file deploy.env --auto-grant-pubsub-publisher
 ```
 
 Optional dry run:

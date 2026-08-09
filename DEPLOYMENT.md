@@ -12,6 +12,7 @@
 Optional:
 - `GOOGLE_AUTH_KEY_PATH`: Path to service-account key JSON (default `_google_auth_key.json`).
 - `VALIDATION_MIN_SCORE`: Weighted validation threshold for configured column value patterns (default `0.7`).
+- `TRIGGER_LOCATION`: Eventarc trigger location; must match SOURCE_BUCKET location (for example `us` for US multi-region buckets).
 
 ## Authentication Priority
 1. If `GOOGLE_AUTH_KEY_PATH` exists, clients use that service-account key explicitly.
@@ -28,6 +29,14 @@ Create a deploy env file (for example `deploy.env`) from `deploy.env.example`, t
 ```bash
 python deployment.py --env-file deploy.env
 ```
+
+If deploy fails with Eventarc Pub/Sub publisher permission error, run:
+
+```bash
+python deployment.py --env-file deploy.env --auto-grant-pubsub-publisher
+```
+
+This grants `roles/pubsub.publisher` to the Cloud Storage service account for the configured project before deploy.
 
 Optional dry run:
 
