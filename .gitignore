@@ -14,3 +14,6 @@ __pycache__/
 data/
 _google_auth_key.json
 deploy.env
+
+# Local raw CSV dumps (can exceed GitHub size limits)
+* dump *.csv

@@ -142,7 +142,8 @@ class FileProcessingService:
         return uploaded_outputs
 
     def _build_destination_path(self, params: DestinationPathParams) -> str:
-        folder_category = self._folder_category_name(params.category).strip("/ ")
+        normalized_category = params.category.strip().lower()
+        folder_category = self._folder_category_name(normalized_category).strip("/ ")
         year = params.split_day.strftime("%Y")
         month = params.split_day.strftime("%m")
         safe_filename = Path(params.output_filename).name
@@ -150,13 +151,13 @@ class FileProcessingService:
 
     @staticmethod
     def _folder_category_name(category: str) -> str:
-        # Preserve existing category behavior while matching required target path casing.
+        # Enforce lowercase folder names for all categories.
         category_folder_map = {
             "contact": "contact",
-            "ev": "EV",
+            "ev": "ev",
             "print": "print",
         }
-        return category_folder_map.get(category, category)
+        return category_folder_map.get(category, category).lower()
 
     def _download_csv(self, source_bucket: str, object_name: str) -> pd.DataFrame:
         blob = self.storage_client.bucket(source_bucket).blob(object_name)
@@ -370,17 +371,17 @@ def load_processing_configs(config_dir: str | Path) -> dict[str, dict[str, Any]]
 def default_naming_rules() -> dict[str, dict[str, Any]]:
     return {
         "contact": {
-            "match_patterns": [r".*contact.*\\.csv$"],
+            "match_patterns": [r".*contact.*\.csv$"],
             "output_stem": "contact_fact",
             "default_file_type": "fact",
         },
         "ev": {
-            "match_patterns": [r".*ev.*\\.csv$", r".*electric.*\\.csv$"],
+            "match_patterns": [r".*ev.*\.csv$", r".*electric.*\.csv$"],
             "output_stem": "ev_fact",
             "default_file_type": "fact",
         },
         "print": {
-            "match_patterns": [r".*print.*\\.csv$"],
+            "match_patterns": [r".*print.*\.csv$"],
             "output_stem": "print_fact",
             "default_file_type": "fact",
         },
