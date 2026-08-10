@@ -302,6 +302,10 @@ class FileProcessingService:
         frames: dict[date, pd.DataFrame] = {}
         for split_day, grouped in with_dates.groupby("_split_date", sort=True):
             output_df = grouped.drop(columns=["_split_date"]).reset_index(drop=True)
+            # Normalize the split date column to a canonical upload format.
+            output_df[actual_column] = pd.to_datetime(
+                output_df[actual_column], errors="coerce"
+            ).dt.strftime("%Y-%m-%d")
             frames[split_day] = output_df
 
         return frames
