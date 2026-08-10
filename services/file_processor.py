@@ -173,11 +173,12 @@ class FileProcessingService:
 
         renamed_df = input_df.rename(columns=rename_map)
 
-        expected_targets = {
-            str(target).strip().lower()
+        expected_targets_ordered = [
+            str(target).strip()
             for target in field_mapping.keys()
             if isinstance(target, str) and target.strip()
-        }
+        ]
+        expected_targets = {target.lower() for target in expected_targets_ordered}
         available_after = {str(col).strip().lower() for col in renamed_df.columns}
         missing_targets = sorted(expected_targets.difference(available_after))
 
@@ -187,7 +188,17 @@ class FileProcessingService:
                 f"missing={missing_targets}"
             )
 
-        return renamed_df
+        available_by_lower = {
+            str(col).strip().lower(): col
+            for col in renamed_df.columns
+        }
+        selected_columns: list[str] = []
+        for target in expected_targets_ordered:
+            actual_column = available_by_lower.get(target.lower())
+            if actual_column is not None and actual_column not in selected_columns:
+                selected_columns.append(actual_column)
+
+        return renamed_df.loc[:, selected_columns].copy()
 
     def _validate_patterns(self, df: pd.DataFrame, config: dict[str, Any]) -> ValidationSummary:
         hints = config.get("content_hints")
