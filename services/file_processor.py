@@ -89,6 +89,9 @@ class FileProcessingService:
                 f"failed_rules={validation_summary.failed_rules}/{validation_summary.total_rules}"
             )
 
+        # Keep only configured target fields in upload outputs.
+        normalized_df = self._select_mapped_columns(normalized_df, config)
+
         split_date_column = str(config.get("split_date_column", "")).strip()
         if not split_date_column:
             raise ValueError(f"Missing split_date_column for category: {category}")
@@ -107,6 +110,12 @@ class FileProcessingService:
                 split_day=split_day,
                 output_filename=output_filename,
             ))
+            LOGGER.info(
+                "Uploading split output for category=%s date=%s to path=%s",
+                category,
+                split_day.isoformat(),
+                destination_path,
+            )
             csv_content = day_frame.to_csv(index=False)
             storage_uri = upload_csv_content(UploadCsvContentParams(
                 storage_client=self.storage_client,
@@ -133,10 +142,11 @@ class FileProcessingService:
         return uploaded_outputs
 
     def _build_destination_path(self, params: DestinationPathParams) -> str:
-        folder_category = self._folder_category_name(params.category)
+        folder_category = self._folder_category_name(params.category).strip("/ ")
         year = params.split_day.strftime("%Y")
         month = params.split_day.strftime("%m")
-        return f"{folder_category}/{year}/{month}/{params.output_filename}"
+        safe_filename = Path(params.output_filename).name
+        return f"{folder_category}/{year}/{month}/{safe_filename}"
 
     @staticmethod
     def _folder_category_name(category: str) -> str:
@@ -188,9 +198,22 @@ class FileProcessingService:
                 f"missing={missing_targets}"
             )
 
+        return renamed_df
+
+    def _select_mapped_columns(self, df: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
+        field_mapping = config.get("field_mapping")
+        if not isinstance(field_mapping, dict) or not field_mapping:
+            raise ValueError("Invalid or empty field_mapping in category config")
+
+        expected_targets_ordered = [
+            str(target).strip()
+            for target in field_mapping.keys()
+            if isinstance(target, str) and target.strip()
+        ]
+
         available_by_lower = {
             str(col).strip().lower(): col
-            for col in renamed_df.columns
+            for col in df.columns
         }
         selected_columns: list[str] = []
         for target in expected_targets_ordered:
@@ -198,7 +221,7 @@ class FileProcessingService:
             if actual_column is not None and actual_column not in selected_columns:
                 selected_columns.append(actual_column)
 
-        return renamed_df.loc[:, selected_columns].copy()
+        return df.loc[:, selected_columns].copy()
 
     def _validate_patterns(self, df: pd.DataFrame, config: dict[str, Any]) -> ValidationSummary:
         hints = config.get("content_hints")
