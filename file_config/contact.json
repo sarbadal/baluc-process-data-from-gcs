@@ -6,22 +6,22 @@
     "month": "Month",
     "event_date": "Date",
     "day_of_month": "Day of Month",
-    "zone": "Zone",
     "region": "Region",
     "state": "State",
     "city": "City",
-    "lob": "LOB",
+    "zone": "Zone",
     "ppl": "PPL",
     "pl": "PL",
     "color": "Color",
-    "fuel_type": "Fuel Type",
+    "lob": "LOB",
     "source_pv": "Source(PV)",
     "source": "Source",
+    "fuel_type": "Fuel Type",
     "lead_classification": "Lead Classification",
     "gf_opportunity_created": "# of GF Opty Created",
     "yf_opportunity_created": "# of YF Opty Created",
-    "test_drive_done_detailed_level": "# of Test Drive Done (Detailed Level)",
-    "sale_closed_qty": "06 Sale Closed Qty"
+    "sale_closed_qty": "06 Sale Closed Qty",
+    "test_drive_done": "# of Test Drive Done (Detailed Level)"
   },
   "content_hints": {
     "sample_size": 10,
@@ -117,7 +117,7 @@
             "weight": 1.0
         },
         {
-            "column": "test_drive_done_detailed_level",
+            "column": "test_drive_done",
             "pattern": "^\\d*$",
             "weight": 1.0
         },

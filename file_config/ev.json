@@ -4,11 +4,9 @@
   "field_mapping": {
     "tm_fiscal_year": "TM Fiscal Year",
     "month": "Month",
-    "day_of_month": "Day of Month",
     "event_date": "Date",
+    "day_of_month": "Day of Month",
     "region": "Region",
-    "area": "Area",
-    "division": "Division",
     "state": "State",
     "city": "City",
     "zone": "Zone",
@@ -23,7 +21,7 @@
     "gf_opportunity_created": "# of GF Opty Created",
     "yf_opportunity_created": "# of YF Opty Created",
     "sale_closed_qty": "06 Sale Closed Qty",
-    "testdrives_done_source_of_contact": "# of TestDrives Done(Source of Contact)"
+    "test_drive_done": "# of TestDrives Done(Source of Contact)"
   },
   "content_hints": {
     "sample_size": 10,
@@ -134,7 +132,7 @@
             "weight": 1
         },
         {
-            "column": "testdrives_done_source_of_contact",
+            "column": "test_drive_done",
             "pattern": "^\\d*$",
             "weight": 1
         }

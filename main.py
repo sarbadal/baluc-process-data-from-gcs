@@ -10,6 +10,7 @@ from services.file_processor import (
     FileProcessingService,
     default_naming_rules,
     load_processing_configs,
+    load_routing_configs,
 )
 from services.google_auth import build_google_auth_context, create_storage_client
 from services.naming import FilenameConventionService
@@ -54,6 +55,7 @@ def _build_processor() -> FileProcessingService:
     )
 
     configs = load_processing_configs(config_dir)
+    routing_configs = load_routing_configs(config_dir)
     naming_service = FilenameConventionService(default_naming_rules())
 
     return FileProcessingService(
@@ -61,6 +63,7 @@ def _build_processor() -> FileProcessingService:
         target_bucket=target_bucket,
         naming_service=naming_service,
         processing_configs=configs,
+        routing_configs=routing_configs,
         validation_min_score=validation_threshold,
     )
 

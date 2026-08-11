@@ -42,6 +42,7 @@ class FileProcessingService:
     target_bucket: str
     naming_service: FilenameConventionService
     processing_configs: dict[str, dict[str, Any]]
+    routing_configs: dict[str, dict[str, Any]] = field(default_factory=dict)
     validation_min_score: float = 0.7
     _category_detector: CategoryDetectionService = field(init=False)
 
@@ -57,6 +58,14 @@ class FileProcessingService:
         input_df = self._download_csv(source_bucket=source_bucket, object_name=object_name)
         if input_df.empty:
             raise ValueError(f"Input CSV is empty: gs://{source_bucket}/{object_name}")
+
+        routed_output = self._try_route_configured_file(
+            source_bucket=source_bucket,
+            object_name=object_name,
+            input_df=input_df,
+        )
+        if routed_output is not None:
+            return [routed_output]
 
         source_filename = Path(object_name).name
         detected = self._category_detector.detect_category(filename=source_filename, df=input_df)
@@ -164,6 +173,91 @@ class FileProcessingService:
         csv_bytes = blob.download_as_bytes()
         return pd.read_csv(io.BytesIO(csv_bytes))
 
+    def _try_route_configured_file(
+        self,
+        source_bucket: str,
+        object_name: str,
+        input_df: pd.DataFrame,
+    ) -> dict[str, str] | None:
+        if not self.routing_configs:
+            return None
+
+        for config_name, config in self.routing_configs.items():
+            if not self._matches_routing_config(input_df=input_df, config=config):
+                continue
+
+            raw_gcs_path = str(config.get("gcs_path", "")).strip()
+            if not raw_gcs_path:
+                continue
+
+            destination_bucket, destination_path = self._parse_gcs_path(raw_gcs_path)
+            source_blob = self.storage_client.bucket(source_bucket).blob(object_name)
+            destination_blob = self.storage_client.bucket(destination_bucket).blob(destination_path)
+            rewrite_token: str | None = None
+            while True:
+                rewrite_token, _, _ = destination_blob.rewrite(source_blob, token=rewrite_token)
+                if rewrite_token is None:
+                    break
+
+            storage_uri = f"gs://{destination_bucket}/{destination_path}"
+            LOGGER.info(
+                "Routed file using config '%s' to %s",
+                config_name,
+                storage_uri,
+            )
+            return {
+                "date": "",
+                "filename": Path(destination_path).name,
+                "destination_path": destination_path,
+                "storage_uri": storage_uri,
+            }
+
+        return None
+
+    def _matches_routing_config(self, input_df: pd.DataFrame, config: dict[str, Any]) -> bool:
+        field_mapping = config.get("field_mapping")
+        if not isinstance(field_mapping, dict) or not field_mapping:
+            return False
+
+        required_source_columns = {
+            str(source).strip().lower()
+            for source in field_mapping.values()
+            if isinstance(source, str) and source.strip()
+        }
+        available_columns = {str(column).strip().lower() for column in input_df.columns}
+        if required_source_columns and not required_source_columns.issubset(available_columns):
+            return False
+
+        hints = config.get("content_hints")
+        pattern_rules = None
+        if isinstance(hints, dict):
+            pattern_rules = hints.get("column_value_patterns")
+            if pattern_rules is None:
+                pattern_rules = hints.get("column_value_pattern")
+        if not isinstance(pattern_rules, list) or not pattern_rules:
+            return False
+
+        try:
+            normalized_df = self._rename_columns(input_df, config)
+        except ValueError:
+            return False
+
+        validation = self._validate_patterns(normalized_df, config)
+        return validation.is_valid and validation.failed_rules == 0 and validation.total_rules > 0
+
+    @staticmethod
+    def _parse_gcs_path(gcs_path: str) -> tuple[str, str]:
+        if not gcs_path.startswith("gs://"):
+            raise ValueError(f"Invalid gcs_path (expected gs://...): {gcs_path}")
+
+        bucket_and_path = gcs_path[5:]
+        bucket, _, object_path = bucket_and_path.partition("/")
+        bucket = bucket.strip()
+        object_path = object_path.strip("/ ")
+        if not bucket or not object_path:
+            raise ValueError(f"Invalid gcs_path (missing bucket or object path): {gcs_path}")
+        return bucket, object_path
+
     def _rename_columns(self, input_df: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
         field_mapping = config.get("field_mapping")
         if not isinstance(field_mapping, dict) or not field_mapping:
@@ -236,6 +330,8 @@ class FileProcessingService:
             )
 
         rules = hints.get("column_value_patterns")
+        if rules is None:
+            rules = hints.get("column_value_pattern")
         if not isinstance(rules, list) or not rules:
             return ValidationSummary(
                 is_valid=True,
@@ -364,6 +460,30 @@ def load_processing_configs(config_dir: str | Path) -> dict[str, dict[str, Any]]
             raise ValueError(f"Invalid config structure in {config_path}")
 
         configs[category] = raw
+
+    return configs
+
+
+def load_routing_configs(config_dir: str | Path) -> dict[str, dict[str, Any]]:
+    base_dir = Path(config_dir)
+    configs: dict[str, dict[str, Any]] = {}
+
+    for config_path in sorted(base_dir.glob("*.json")):
+        with config_path.open("r", encoding="utf-8") as config_file:
+            raw = json.load(config_file)
+
+        if not isinstance(raw, dict):
+            continue
+
+        gcs_path = str(raw.get("gcs_path", "")).strip()
+        if not gcs_path:
+            continue
+
+        config_name = config_path.stem.strip().lower()
+        if not config_name:
+            continue
+
+        configs[config_name] = raw
 
     return configs
 

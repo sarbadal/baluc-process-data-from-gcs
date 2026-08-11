@@ -110,6 +110,8 @@ class CategoryDetectionService:
             return None
 
         pattern_rules = hints.get("column_value_patterns")
+        if pattern_rules is None:
+            pattern_rules = hints.get("column_value_pattern")
         if not isinstance(pattern_rules, list) or not pattern_rules:
             return None
 
