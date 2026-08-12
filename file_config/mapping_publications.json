@@ -1,0 +1,24 @@
+{
+  "_comment_field_mapping": "Mapping direction is target_field -> source_csv_column",
+  "_comment_file_type": "mapping",
+  "gcs_path": "gs://inventory-baluc/mapping/publications.csv",
+  "field_mapping": {
+    "pub_name": "pub_name",
+    "publication": "publication"
+  },
+  "content_hints": {
+    "sample_size": 10,
+    "column_value_patterns": [
+      {
+        "column": "pub_name",
+        "pattern": "^.+$",
+        "weight": 1
+      },
+      {
+        "column": "publication",
+        "pattern": "^.+$",
+        "weight": 1
+      }
+    ]
+  }
+}
