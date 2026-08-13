@@ -12,6 +12,7 @@ REQUIRED_ENV_KEYS = (
     "GOOGLE_CLOUD_PROJECT_ID",
     "SOURCE_BUCKET",
     "TARGET_BUCKET",
+    "BIGQUERY_DATASET",
 )
 
 
@@ -20,6 +21,7 @@ class DeployContext:
     project_id: str
     source_bucket: str
     target_bucket: str
+    bigquery_dataset: str
     validation_min_score: str
     google_auth_key_path: str
     function_name: str
@@ -76,6 +78,7 @@ def build_deploy_context(args: argparse.Namespace, env_values: dict[str, str]) -
         project_id=env_values["GOOGLE_CLOUD_PROJECT_ID"].strip(),
         source_bucket=env_values["SOURCE_BUCKET"].strip(),
         target_bucket=env_values["TARGET_BUCKET"].strip(),
+        bigquery_dataset=env_values["BIGQUERY_DATASET"].strip(),
         validation_min_score=env_values.get("VALIDATION_MIN_SCORE", "0.7").strip() or "0.7",
         google_auth_key_path=env_values.get("GOOGLE_AUTH_KEY_PATH", "").strip(),
         function_name=str(args.function_name).strip(),
@@ -226,6 +229,7 @@ def build_gcloud_command(context: DeployContext, env_values: dict[str, str]) -> 
         "GOOGLE_CLOUD_PROJECT_ID": context.project_id,
         "SOURCE_BUCKET": context.source_bucket,
         "TARGET_BUCKET": context.target_bucket,
+        "BIGQUERY_DATASET": context.bigquery_dataset,
         "VALIDATION_MIN_SCORE": context.validation_min_score,
     }
 

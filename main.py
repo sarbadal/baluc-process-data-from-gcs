@@ -9,10 +9,16 @@ from dotenv import load_dotenv
 from services.file_processor import (
     FileProcessingService,
     default_naming_rules,
+    load_bigquery_table_configs,
+    load_bigquery_table_rules,
     load_processing_configs,
     load_routing_configs,
 )
-from services.google_auth import build_google_auth_context, create_storage_client
+from services.google_auth import (
+    build_google_auth_context,
+    create_bigquery_client,
+    create_storage_client,
+)
 from services.naming import FilenameConventionService
 
 
@@ -38,6 +44,7 @@ def _build_processor() -> FileProcessingService:
         google_auth_key_path = "_google_auth_key.json"
 
     target_bucket = _require_env("TARGET_BUCKET")
+    bigquery_dataset = _require_env("BIGQUERY_DATASET")
 
     validation_threshold_raw = os.getenv("VALIDATION_MIN_SCORE", "0.7").strip()
     try:
@@ -56,13 +63,19 @@ def _build_processor() -> FileProcessingService:
 
     configs = load_processing_configs(config_dir)
     routing_configs = load_routing_configs(config_dir)
+    bigquery_table_configs = load_bigquery_table_configs(config_dir)
+    bigquery_table_rules = load_bigquery_table_rules(config_dir)
     naming_service = FilenameConventionService(default_naming_rules())
 
     return FileProcessingService(
+        bigquery_client=create_bigquery_client(auth_context),
+        bigquery_dataset=bigquery_dataset,
         storage_client=create_storage_client(auth_context),
         target_bucket=target_bucket,
         naming_service=naming_service,
         processing_configs=configs,
+        bigquery_table_configs=bigquery_table_configs,
+        bigquery_table_rules=bigquery_table_rules,
         routing_configs=routing_configs,
         validation_min_score=validation_threshold,
     )

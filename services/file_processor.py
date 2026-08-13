@@ -9,6 +9,8 @@ from pathlib import Path
 import re
 from typing import Any
 
+from google.api_core.exceptions import NotFound
+from google.cloud import bigquery
 from google.cloud import storage
 import pandas as pd
 
@@ -38,10 +40,14 @@ class DestinationPathParams:
 
 @dataclass
 class FileProcessingService:
+    bigquery_client: bigquery.Client
+    bigquery_dataset: str
     storage_client: storage.Client
     target_bucket: str
     naming_service: FilenameConventionService
     processing_configs: dict[str, dict[str, Any]]
+    bigquery_table_configs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    bigquery_table_rules: dict[str, dict[str, str]] = field(default_factory=dict)
     routing_configs: dict[str, dict[str, Any]] = field(default_factory=dict)
     validation_min_score: float = 0.7
     _category_detector: CategoryDetectionService = field(init=False)
@@ -54,6 +60,7 @@ class FileProcessingService:
 
     def process_uploaded_object(self, source_bucket: str, object_name: str) -> list[dict[str, str]]:
         LOGGER.info("Starting processing for gs://%s/%s", source_bucket, object_name)
+        self._ensure_bigquery_tables_exist()
 
         input_df = self._download_csv(source_bucket=source_bucket, object_name=object_name)
         if input_df.empty:
@@ -132,6 +139,12 @@ class FileProcessingService:
                 destination_path=destination_path,
                 csv_content=csv_content,
             ))
+            self._delete_fact_rows_and_load_from_uri(
+                category=category,
+                split_day=split_day,
+                storage_uri=storage_uri,
+                config=config,
+            )
             uploaded_outputs.append(
                 {
                     "date": split_day.isoformat(),
@@ -149,6 +162,150 @@ class FileProcessingService:
             len(uploaded_outputs),
         )
         return uploaded_outputs
+
+    def _ensure_bigquery_tables_exist(self) -> None:
+        if not self.bigquery_table_configs:
+            return
+
+        dataset_ref = self._ensure_bigquery_dataset_exists()
+        for config_name, config in self.bigquery_table_configs.items():
+            schema = self._build_bigquery_schema(config)
+            if not schema:
+                continue
+
+            table_name = self._table_name_for_config(config_name)
+
+            table_ref = dataset_ref.table(table_name)
+            try:
+                self.bigquery_client.get_table(table_ref)
+            except NotFound:
+                table = bigquery.Table(table_ref, schema=schema)
+                partition_field = self._partition_field_for_config(config)
+                is_fact_table = self._is_fact_config(config_name)
+                if partition_field and is_fact_table:
+                    table.time_partitioning = bigquery.TimePartitioning(
+                        type_=bigquery.TimePartitioningType.DAY,
+                        field=partition_field,
+                    )
+                self.bigquery_client.create_table(table)
+                LOGGER.info(
+                    "Created BigQuery table %s.%s",
+                    self.bigquery_dataset,
+                    table_name,
+                )
+
+    @staticmethod
+    def _partition_field_for_config(config: dict[str, Any]) -> str | None:
+        raw_split_date = str(config.get("split_date_column", "")).strip()
+        if not raw_split_date:
+            return None
+        return _normalize_bigquery_identifier(raw_split_date, fallback="split_date")
+
+    def _delete_fact_rows_and_load_from_uri(
+        self,
+        category: str,
+        split_day: date,
+        storage_uri: str,
+        config: dict[str, Any],
+    ) -> None:
+        table_name = self._table_name_for_config(category)
+        split_date_column = self._partition_field_for_config(config)
+        if not split_date_column:
+            raise ValueError(f"Missing split_date_column for fact table category={category}")
+
+        query = (
+            f"DELETE FROM `{self.bigquery_client.project}.{self.bigquery_dataset}.{table_name}` "
+            f"WHERE `{split_date_column}` = @split_day"
+        )
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("split_day", "DATE", split_day),
+            ]
+        )
+        self.bigquery_client.query(query, job_config=job_config).result()
+
+        self._append_uri_to_bigquery(table_name=table_name, storage_uri=storage_uri)
+        LOGGER.info(
+            "Deleted and reloaded fact rows for table=%s split_date=%s from %s",
+            table_name,
+            split_day.isoformat(),
+            storage_uri,
+        )
+
+    def _truncate_mapping_table_and_load_from_uri(
+        self,
+        config_name: str,
+        storage_uri: str,
+    ) -> None:
+        table_name = self._table_name_for_config(config_name)
+        query = (
+            f"TRUNCATE TABLE `{self.bigquery_client.project}.{self.bigquery_dataset}.{table_name}`"
+        )
+        self.bigquery_client.query(query).result()
+
+        self._append_uri_to_bigquery(table_name=table_name, storage_uri=storage_uri)
+        LOGGER.info("Truncated and reloaded mapping table=%s from %s", table_name, storage_uri)
+
+    def _append_uri_to_bigquery(self, table_name: str, storage_uri: str) -> None:
+        table_id = f"{self.bigquery_client.project}.{self.bigquery_dataset}.{table_name}"
+        job_config = bigquery.LoadJobConfig(
+            write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+            source_format=bigquery.SourceFormat.CSV,
+            skip_leading_rows=1,
+        )
+        self.bigquery_client.load_table_from_uri(
+            storage_uri,
+            table_id,
+            job_config=job_config,
+        ).result()
+
+    @staticmethod
+    def _normalize_dataframe_for_bigquery(df: pd.DataFrame) -> pd.DataFrame:
+        normalized_df = df.copy()
+        normalized_df.columns = [
+            _normalize_bigquery_identifier(str(column), fallback="column")
+            for column in normalized_df.columns
+        ]
+        return normalized_df
+
+    def _ensure_bigquery_dataset_exists(self) -> bigquery.DatasetReference:
+        dataset_ref = bigquery.DatasetReference(
+            self.bigquery_client.project,
+            self.bigquery_dataset,
+        )
+        try:
+            self.bigquery_client.get_dataset(dataset_ref)
+        except NotFound:
+            self.bigquery_client.create_dataset(bigquery.Dataset(dataset_ref))
+            LOGGER.info("Created BigQuery dataset %s", self.bigquery_dataset)
+        return dataset_ref
+
+    def _build_bigquery_schema(self, config: dict[str, Any]) -> list[bigquery.SchemaField]:
+        field_mapping = config.get("field_mapping")
+        if not isinstance(field_mapping, dict) or not field_mapping:
+            return []
+
+        raw_split_date_column = str(config.get("split_date_column", "")).strip()
+        split_date_column = _normalize_bigquery_identifier(
+            raw_split_date_column,
+            fallback="split_date",
+        ) if raw_split_date_column else ""
+        schema: list[bigquery.SchemaField] = []
+        seen_columns: set[str] = set()
+
+        for target_name in field_mapping.keys():
+            if not isinstance(target_name, str) or not target_name.strip():
+                continue
+
+            column_name = _normalize_bigquery_identifier(target_name, fallback="column")
+            if column_name in seen_columns:
+                continue
+            seen_columns.add(column_name)
+
+            column_type = "DATE" if column_name == split_date_column else "STRING"
+            schema.append(bigquery.SchemaField(column_name, column_type, mode="NULLABLE"))
+
+        return schema
 
     def _build_destination_path(self, params: DestinationPathParams) -> str:
         normalized_category = params.category.strip().lower()
@@ -185,21 +342,27 @@ class FileProcessingService:
         for config_name, config in self.routing_configs.items():
             if not self._matches_routing_config(input_df=input_df, config=config):
                 continue
-
             raw_gcs_path = str(config.get("gcs_path", "")).strip()
-            if not raw_gcs_path:
-                continue
+            destination_path = self._build_mapping_destination_path(
+                object_name=object_name,
+                raw_gcs_path=raw_gcs_path,
+            )
 
-            destination_bucket, destination_path = self._parse_gcs_path(raw_gcs_path)
-            source_blob = self.storage_client.bucket(source_bucket).blob(object_name)
-            destination_blob = self.storage_client.bucket(destination_bucket).blob(destination_path)
-            rewrite_token: str | None = None
-            while True:
-                rewrite_token, _, _ = destination_blob.rewrite(source_blob, token=rewrite_token)
-                if rewrite_token is None:
-                    break
+            normalized_df = self._rename_columns(input_df, config)
+            selected_df = self._select_mapped_columns(normalized_df, config)
+            csv_content = selected_df.to_csv(index=False)
+            storage_uri = upload_csv_content(UploadCsvContentParams(
+                storage_client=self.storage_client,
+                target_bucket=self.target_bucket,
+                destination_path=destination_path,
+                csv_content=csv_content,
+            ))
 
-            storage_uri = f"gs://{destination_bucket}/{destination_path}"
+            self._truncate_mapping_table_and_load_from_uri(
+                config_name=config_name,
+                storage_uri=storage_uri,
+            )
+
             LOGGER.info(
                 "Routed file using config '%s' to %s",
                 config_name,
@@ -257,6 +420,31 @@ class FileProcessingService:
         if not bucket or not object_path:
             raise ValueError(f"Invalid gcs_path (missing bucket or object path): {gcs_path}")
         return bucket, object_path
+
+    def _build_mapping_destination_path(self, object_name: str, raw_gcs_path: str) -> str:
+        # Mapping outputs are always written under mapping/ in target bucket.
+        filename = Path(object_name).name
+        if raw_gcs_path:
+            _, object_path = self._parse_gcs_path(raw_gcs_path)
+            configured_name = Path(object_path).name
+            if configured_name:
+                filename = configured_name
+
+        return f"mapping/{filename}"
+
+    def _table_name_for_config(self, config_name: str) -> str:
+        rule = self.bigquery_table_rules.get(config_name, {})
+        configured = str(rule.get("table_name", "")).strip()
+        if configured:
+            return _normalize_bigquery_identifier(configured, fallback="table")
+        return _normalize_bigquery_identifier(config_name, fallback="table")
+
+    def _is_fact_config(self, config_name: str) -> bool:
+        rule = self.bigquery_table_rules.get(config_name, {})
+        table_type = str(rule.get("table_type", "")).strip().lower()
+        if table_type:
+            return table_type == "fact"
+        return config_name in {"contact", "ev", "print"}
 
     def _rename_columns(self, input_df: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
         field_mapping = config.get("field_mapping")
@@ -486,6 +674,70 @@ def load_routing_configs(config_dir: str | Path) -> dict[str, dict[str, Any]]:
         configs[config_name] = raw
 
     return configs
+
+
+def load_bigquery_table_configs(config_dir: str | Path) -> dict[str, dict[str, Any]]:
+    base_dir = Path(config_dir)
+    configs: dict[str, dict[str, Any]] = {}
+
+    for config_path in sorted(base_dir.glob("*.json")):
+        config_name = config_path.stem.strip().lower()
+        if config_name not in {"contact", "ev", "print"} and not config_name.startswith("mapping"):
+            continue
+
+        with config_path.open("r", encoding="utf-8") as config_file:
+            raw = json.load(config_file)
+
+        if not isinstance(raw, dict):
+            continue
+
+        field_mapping = raw.get("field_mapping")
+        if not isinstance(field_mapping, dict) or not field_mapping:
+            continue
+
+        configs[config_name] = raw
+
+    return configs
+
+
+def load_bigquery_table_rules(config_dir: str | Path) -> dict[str, dict[str, str]]:
+    config_path = Path(config_dir) / "bigquery_tables.json"
+    if not config_path.is_file():
+        return {}
+
+    with config_path.open("r", encoding="utf-8") as config_file:
+        raw = json.load(config_file)
+
+    if not isinstance(raw, dict):
+        raise ValueError(f"Invalid BigQuery table rules structure in {config_path}")
+
+    rules: dict[str, dict[str, str]] = {}
+    for config_name, rule in raw.items():
+        if not isinstance(config_name, str) or not config_name.strip():
+            continue
+        if not isinstance(rule, dict):
+            continue
+
+        table_name = str(rule.get("table_name", "")).strip()
+        table_type = str(rule.get("table_type", "")).strip().lower()
+
+        normalized_name = config_name.strip().lower()
+        rules[normalized_name] = {
+            "table_name": table_name,
+            "table_type": table_type,
+        }
+
+    return rules
+
+
+def _normalize_bigquery_identifier(value: str, fallback: str) -> str:
+    normalized = re.sub(r"[^a-zA-Z0-9_]", "_", value.strip().lower())
+    normalized = re.sub(r"_+", "_", normalized).strip("_")
+    if not normalized:
+        normalized = fallback
+    if normalized[0].isdigit():
+        normalized = f"_{normalized}"
+    return normalized
 
 
 def default_naming_rules() -> dict[str, dict[str, Any]]:

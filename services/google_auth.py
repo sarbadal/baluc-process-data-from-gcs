@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from google.auth.credentials import Credentials
+from google.cloud import bigquery
 from google.cloud import storage
 from google.oauth2 import service_account
 
@@ -66,6 +67,13 @@ def build_google_auth_context(project_id: str, configured_key_path: str, base_di
 
 def create_storage_client(auth_context: GoogleAuthContext) -> storage.Client:
     return storage.Client(
+        project=auth_context.project_id,
+        credentials=auth_context.credentials,
+    )
+
+
+def create_bigquery_client(auth_context: GoogleAuthContext) -> bigquery.Client:
+    return bigquery.Client(
         project=auth_context.project_id,
         credentials=auth_context.credentials,
     )

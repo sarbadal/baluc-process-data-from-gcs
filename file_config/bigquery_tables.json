@@ -1,0 +1,26 @@
+{
+  "contact": {
+    "table_name": "contact",
+    "table_type": "fact"
+  },
+  "ev": {
+    "table_name": "ev",
+    "table_type": "fact"
+  },
+  "print": {
+    "table_name": "print",
+    "table_type": "fact"
+  },
+  "mapping_brand_pvev": {
+    "table_name": "mapping_brand_pvev",
+    "table_type": "mapping"
+  },
+  "mapping_ppl_caption_bu": {
+    "table_name": "mapping_ppl_caption_bu",
+    "table_type": "mapping"
+  },
+  "mapping_publications": {
+    "table_name": "mapping_publications",
+    "table_type": "mapping"
+  }
+}

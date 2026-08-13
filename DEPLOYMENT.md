@@ -8,6 +8,7 @@
 - `GOOGLE_CLOUD_PROJECT_ID`: Explicit GCP project used for Google Cloud clients.
 - `SOURCE_BUCKET`: Bucket that receives incoming CSV files.
 - `TARGET_BUCKET`: Bucket where split CSV files are uploaded.
+- `BIGQUERY_DATASET`: BigQuery dataset where tables are auto-created.
 
 Optional:
 - `GOOGLE_AUTH_KEY_PATH`: Path to service-account key JSON (default `_google_auth_key.json`).
@@ -54,7 +55,7 @@ gcloud functions deploy process-gcs-file \
   --source=. \
   --entry-point=process_gcs_file \
   --trigger-bucket=${SOURCE_BUCKET} \
-  --set-env-vars=GOOGLE_CLOUD_PROJECT_ID=${GOOGLE_CLOUD_PROJECT_ID},SOURCE_BUCKET=${SOURCE_BUCKET},TARGET_BUCKET=${TARGET_BUCKET},VALIDATION_MIN_SCORE=0.7
+  --set-env-vars=GOOGLE_CLOUD_PROJECT_ID=${GOOGLE_CLOUD_PROJECT_ID},SOURCE_BUCKET=${SOURCE_BUCKET},TARGET_BUCKET=${TARGET_BUCKET},BIGQUERY_DATASET=${BIGQUERY_DATASET},VALIDATION_MIN_SCORE=0.7
 ```
 
 ## Local Run (Functions Framework)
