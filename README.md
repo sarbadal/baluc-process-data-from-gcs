@@ -24,7 +24,6 @@ cp deploy.env.example deploy.env
 - GOOGLE_CLOUD_PROJECT_ID
 - SOURCE_BUCKET
 - TARGET_BUCKET
-- BIGQUERY_DATASET
 - Optional: GOOGLE_AUTH_KEY_PATH, VALIDATION_MIN_SCORE, TRIGGER_LOCATION
 
 Sample `deploy.env`:
@@ -35,7 +34,6 @@ GOOGLE_AUTH_KEY_PATH=_google_auth_key.json
 SOURCE_BUCKET=your-source-bucket
 TRIGGER_LOCATION=us-central1
 TARGET_BUCKET=your-target-bucket
-BIGQUERY_DATASET=your-bigquery-dataset
 VALIDATION_MIN_SCORE=0.7
 ```
 
@@ -69,7 +67,7 @@ python deployment.py --env-file deploy.env --dry-run
 6. Split into one CSV per date from split_date_column.
 7. Generate output file names using existing naming service.
 8. Upload daily files to target bucket using category/year/month path.
-9. Ensure BigQuery tables exist (create-if-missing) for `contact`, `ev`, `print`, and `mapping_*` configs.
+9. Skip database updates and only publish processed CSV outputs to Cloud Storage.
 
 ## Supported Categories
 
@@ -111,7 +109,6 @@ Required:
 - GOOGLE_CLOUD_PROJECT_ID
 - SOURCE_BUCKET
 - TARGET_BUCKET
-- BIGQUERY_DATASET
 
 Optional:
 

@@ -1,97 +1,21 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-from services.file_processor import (
-    FileProcessingService,
-    default_naming_rules,
-    load_bigquery_table_configs,
-    load_bigquery_table_rules,
-    load_processing_configs,
-    load_routing_configs,
-)
-from services.google_auth import (
-    build_google_auth_context,
-    create_bigquery_client,
-    create_storage_client,
-)
-from services.naming import FilenameConventionService
+from services.processing.bootstrap import get_processor, get_source_bucket
 
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 
-load_dotenv()
-
-_PROCESSOR: FileProcessingService | None = None
-
-
-def _require_env(name: str) -> str:
-    value = os.getenv(name, "").strip()
-    if not value:
-        raise RuntimeError(f"Missing required environment variable: {name}")
-    return value
-
-
-def _build_processor() -> FileProcessingService:
-    project_id = _require_env("GOOGLE_CLOUD_PROJECT_ID")
-    google_auth_key_path = os.getenv("GOOGLE_AUTH_KEY_PATH", "_google_auth_key.json").strip()
-    if not google_auth_key_path:
-        google_auth_key_path = "_google_auth_key.json"
-
-    target_bucket = _require_env("TARGET_BUCKET")
-    bigquery_dataset = _require_env("BIGQUERY_DATASET")
-
-    validation_threshold_raw = os.getenv("VALIDATION_MIN_SCORE", "0.7").strip()
-    try:
-        validation_threshold = float(validation_threshold_raw)
-    except ValueError as err:
-        raise RuntimeError("VALIDATION_MIN_SCORE must be a float") from err
-
-    project_root = Path(__file__).resolve().parent
-    config_dir = project_root / "file_config"
-
-    auth_context = build_google_auth_context(
-        project_id=project_id,
-        configured_key_path=google_auth_key_path,
-        base_dir=project_root,
-    )
-
-    configs = load_processing_configs(config_dir)
-    routing_configs = load_routing_configs(config_dir)
-    bigquery_table_configs = load_bigquery_table_configs(config_dir)
-    bigquery_table_rules = load_bigquery_table_rules(config_dir)
-    naming_service = FilenameConventionService(default_naming_rules())
-
-    return FileProcessingService(
-        bigquery_client=create_bigquery_client(auth_context),
-        bigquery_dataset=bigquery_dataset,
-        storage_client=create_storage_client(auth_context),
-        target_bucket=target_bucket,
-        naming_service=naming_service,
-        processing_configs=configs,
-        bigquery_table_configs=bigquery_table_configs,
-        bigquery_table_rules=bigquery_table_rules,
-        routing_configs=routing_configs,
-        validation_min_score=validation_threshold,
-    )
-
-
-def _get_processor() -> FileProcessingService:
-    global _PROCESSOR
-    if _PROCESSOR is None:
-        _PROCESSOR = _build_processor()
-    return _PROCESSOR
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def process_gcs_file(event: dict, _context: object) -> None:
     """Cloud Function entry point for GCS object finalize events."""
 
-    source_bucket = _require_env("SOURCE_BUCKET")
+    source_bucket = get_source_bucket()
 
     event_bucket = str(event.get("bucket", "")).strip()
     object_name = str(event.get("name", "")).strip()
@@ -113,7 +37,7 @@ def process_gcs_file(event: dict, _context: object) -> None:
         LOGGER.info("Ignoring non-CSV object: gs://%s/%s", event_bucket, object_name)
         return
 
-    processor = _get_processor()
+    processor = get_processor(PROJECT_ROOT)
     outputs = processor.process_uploaded_object(source_bucket=event_bucket, object_name=object_name)
 
     LOGGER.info(

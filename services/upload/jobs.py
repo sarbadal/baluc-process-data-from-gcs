@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from google.cloud import storage
 from werkzeug.datastructures import FileStorage
 
-from .upload_service import UploadRequest, UploadResult, UploadService
+from .service import UploadRequest, UploadResult, UploadService
 
 
 IST = ZoneInfo("Asia/Kolkata")
